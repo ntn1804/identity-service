@@ -5,47 +5,60 @@ import com.nghiant.identityservice.dto.request.UserUpdateRequest;
 import com.nghiant.identityservice.entity.User;
 import com.nghiant.identityservice.repository.UserRepository;
 import com.nghiant.identityservice.service.UserService;
-import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 public class UserServiceImpl implements UserService {
 
-  @Autowired
-  private UserRepository userRepository;
+    @Autowired
+    private UserRepository userRepository;
 
-  @Override
-  public User createUser(UserCreationRequest request) {
-    User user = new User();
+    @Override
+    public User createUser(UserCreationRequest request) {
+        if (userRepository.existsByUsername(request.getUsername())) throw new RuntimeException("Username is existed");
 
-    user.setUsername(request.getUsername());
-    user.setPassword(request.getPassword());
-    user.setFirstName(request.getFirstName());
-    user.setLastName(request.getLastName());
-    user.setDob(request.getDob());
+        User user = new User();
 
-    return userRepository.save(user);
-  }
+        user.setUsername(request.getUsername());
+        user.setPassword(request.getPassword());
+        user.setFirstName(request.getFirstName());
+        user.setLastName(request.getLastName());
+        user.setDob(request.getDob());
 
-  @Override
-  public User getUser(String userId) {
-    return userRepository.findById(userId)
-        .orElseThrow(() -> new RuntimeException("User not found"));
-  }
+        return userRepository.save(user);
+    }
 
-  @Override
-  public List<User> getUsers() {
-    return userRepository.findAll();
-  }
+    @Override
+    public User getUser(String userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+    }
 
-  @Override
-  public User updateUser(UserUpdateRequest request) {
-    return null;
-  }
+    @Override
+    public List<User> getUsers() {
+        return userRepository.findAll();
+    }
 
-  @Override
-  public void deleteUser(String userId) {
+    @Override
+    public User updateUser(String userId, UserUpdateRequest request) {
+        User existedUser = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
 
-  }
+        existedUser.setPassword(request.getPassword());
+        existedUser.setFirstName(request.getFirstName());
+        existedUser.setLastName(request.getLastName());
+        existedUser.setDob(request.getDob());
+
+        return userRepository.save(existedUser);
+    }
+
+    @Override
+    public String deleteUser(String userId) {
+        User existedUser = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+
+        userRepository.delete(existedUser);
+        return userId;
+    }
 }

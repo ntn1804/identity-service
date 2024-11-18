@@ -9,6 +9,6 @@ public interface UserService {
   User createUser(UserCreationRequest request);
   User getUser(String userId);
   List<User> getUsers();
-  User updateUser(UserUpdateRequest request);
-  void deleteUser(String userId);
+  User updateUser(String userId, UserUpdateRequest request);
+  String deleteUser(String userId);
 }
