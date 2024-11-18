@@ -5,6 +5,7 @@ import com.nghiant.identityservice.dto.request.UserUpdateRequest;
 import com.nghiant.identityservice.dto.response.ApiResponse;
 import com.nghiant.identityservice.entity.User;
 import com.nghiant.identityservice.service.UserService;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,7 +19,7 @@ public class UserController {
     private UserService userService;
 
     @PostMapping
-    ApiResponse<User> createUser(@RequestBody UserCreationRequest request) {
+    ApiResponse<User> createUser(@RequestBody @Valid UserCreationRequest request) {
         ApiResponse<User> apiResponse = new ApiResponse<>();
         apiResponse.setResult(userService.createUser(request));
         return apiResponse;
