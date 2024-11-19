@@ -2,66 +2,74 @@ package com.nghiant.identityservice.service.impl;
 
 import com.nghiant.identityservice.dto.request.UserCreationRequest;
 import com.nghiant.identityservice.dto.request.UserUpdateRequest;
+import com.nghiant.identityservice.dto.response.UserResponse;
 import com.nghiant.identityservice.entity.User;
 import com.nghiant.identityservice.exception.AppException;
 import com.nghiant.identityservice.exception.ErrorCode;
+import com.nghiant.identityservice.mapper.UserMapper;
 import com.nghiant.identityservice.repository.UserRepository;
 import com.nghiant.identityservice.service.UserService;
+import java.util.ArrayList;
 import java.util.List;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+@RequiredArgsConstructor
 @Service
 public class UserServiceImpl implements UserService {
 
-  @Autowired
-  private UserRepository userRepository;
+  private final UserRepository userRepository;
+  private final UserMapper userMapper;
 
   @Override
-  public User createUser(UserCreationRequest request) {
-      if (userRepository.existsByUsername(request.getUsername())) {
-          throw new AppException(ErrorCode.USER_EXISTED);
-      }
+  public UserResponse createUser(UserCreationRequest request) {
+    if (userRepository.existsByUsername(request.getUsername())) {
+      throw new AppException(ErrorCode.USER_EXISTED);
+    }
 
-    User user = new User();
+    User user = userMapper.toUser(request);
+    userRepository.save(user);
 
-    user.setUsername(request.getUsername());
-    user.setPassword(request.getPassword());
-    user.setFirstName(request.getFirstName());
-    user.setLastName(request.getLastName());
-    user.setDob(request.getDob());
-
-    return userRepository.save(user);
+    return userMapper.toUserResponse(user);
   }
 
   @Override
-  public User getUser(String userId) {
-    return userRepository.findById(userId)
-        .orElseThrow(() -> new RuntimeException("User not found"));
+  public UserResponse getUser(String userId) {
+
+    User user = userRepository.findById(userId)
+        .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+    return userMapper.toUserResponse(user);
   }
 
   @Override
-  public List<User> getUsers() {
-    return userRepository.findAll();
+  public List<UserResponse> getUsers() {
+    List<User> userList = userRepository.findAll();
+    List<UserResponse> responseList = new ArrayList<>();
+
+    for (User user : userList) {
+      responseList.add(userMapper.toUserResponse(user));
+    }
+
+    return responseList;
   }
 
   @Override
-  public User updateUser(String userId, UserUpdateRequest request) {
+  public UserResponse updateUser(String userId, UserUpdateRequest request) {
     User existedUser = userRepository.findById(userId)
         .orElseThrow(() -> new RuntimeException("User not found"));
 
-    existedUser.setPassword(request.getPassword());
-    existedUser.setFirstName(request.getFirstName());
-    existedUser.setLastName(request.getLastName());
-    existedUser.setDob(request.getDob());
+    userMapper.updateUser(existedUser, request);
 
-    return userRepository.save(existedUser);
+    userRepository.save(existedUser);
+
+    return userMapper.toUserResponse(existedUser);
   }
 
   @Override
   public String deleteUser(String userId) {
     User existedUser = userRepository.findById(userId)
-        .orElseThrow(() -> new RuntimeException("User not found"));
+        .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
     userRepository.delete(existedUser);
     return "User deleted successfully";
