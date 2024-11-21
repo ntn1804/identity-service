@@ -12,6 +12,8 @@ import com.nghiant.identityservice.service.UserService;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @RequiredArgsConstructor
@@ -28,6 +30,8 @@ public class UserServiceImpl implements UserService {
     }
 
     User user = userMapper.toUser(request);
+    PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
+    user.setPassword(passwordEncoder.encode(request.getPassword()));
     userRepository.save(user);
 
     return userMapper.toUserResponse(user);
