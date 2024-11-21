@@ -1,9 +1,13 @@
 package com.nghiant.identityservice.controller;
 
 import com.nghiant.identityservice.dto.request.AuthenticationRequest;
+import com.nghiant.identityservice.dto.request.IntrospectRequest;
 import com.nghiant.identityservice.dto.response.ApiResponse;
 import com.nghiant.identityservice.dto.response.AuthenticationResponse;
+import com.nghiant.identityservice.dto.response.IntrospectResponse;
 import com.nghiant.identityservice.service.AuthenticationService;
+import com.nimbusds.jose.JOSEException;
+import java.text.ParseException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -17,12 +21,18 @@ public class AuthenticationController {
 
   private final AuthenticationService authenticationService;
 
-  @PostMapping
+  @PostMapping("/login")
   ApiResponse<AuthenticationResponse> login(@RequestBody AuthenticationRequest request) {
     ApiResponse<AuthenticationResponse> apiResponse = new ApiResponse<>();
-    apiResponse.setResult(AuthenticationResponse.builder()
-        .authenticated(authenticationService.authenticated(request))
-        .build());
+    apiResponse.setResult(authenticationService.authenticate(request));
+    return apiResponse;
+  }
+
+  @PostMapping("/verify-token")
+  ApiResponse<IntrospectResponse> verifyToken(@RequestBody IntrospectRequest request)
+      throws ParseException, JOSEException {
+    ApiResponse<IntrospectResponse> apiResponse = new ApiResponse<>();
+    apiResponse.setResult(authenticationService.verifyToken(request));
     return apiResponse;
   }
 }
