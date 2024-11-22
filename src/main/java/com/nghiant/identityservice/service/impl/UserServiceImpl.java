@@ -4,13 +4,16 @@ import com.nghiant.identityservice.dto.request.UserCreationRequest;
 import com.nghiant.identityservice.dto.request.UserUpdateRequest;
 import com.nghiant.identityservice.dto.response.UserResponse;
 import com.nghiant.identityservice.entity.User;
+import com.nghiant.identityservice.enums.Role;
 import com.nghiant.identityservice.exception.AppException;
 import com.nghiant.identityservice.exception.ErrorCode;
 import com.nghiant.identityservice.mapper.UserMapper;
 import com.nghiant.identityservice.repository.UserRepository;
 import com.nghiant.identityservice.service.UserService;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -22,6 +25,7 @@ public class UserServiceImpl implements UserService {
 
   private final UserRepository userRepository;
   private final UserMapper userMapper;
+  private final PasswordEncoder passwordEncoder;
 
   @Override
   public UserResponse createUser(UserCreationRequest request) {
@@ -30,8 +34,12 @@ public class UserServiceImpl implements UserService {
     }
 
     User user = userMapper.toUser(request);
-    PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
     user.setPassword(passwordEncoder.encode(request.getPassword()));
+
+    Set<String> role = new HashSet<>();
+    role.add(Role.USER.name());
+    user.setRoles(role);
+
     userRepository.save(user);
 
     return userMapper.toUserResponse(user);

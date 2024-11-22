@@ -23,6 +23,7 @@ import java.text.ParseException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
+import java.util.StringJoiner;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -51,7 +52,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     authenticationResponse.setAuthenticated(
         passwordEncoder.matches(request.getPassword(), user.getPassword()));
 
-    String token = generateToken(request);
+    String token = generateToken(user);
     authenticationResponse.setToken(token);
 
     return authenticationResponse;
@@ -76,13 +77,13 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         .build();
   }
 
-  private String generateToken(AuthenticationRequest request) {
+  private String generateToken(User user) {
     JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
 
-    JWTClaimsSet claimsSet = new JWTClaimsSet.Builder().subject(request.getUsername())
+    JWTClaimsSet claimsSet = new JWTClaimsSet.Builder().subject(user.getUsername())
         .issuer("nghiant.com").issueTime(new Date())
         .expirationTime(new Date(Instant.now().plus(1, ChronoUnit.HOURS).toEpochMilli()))
-        .claim("customClaim", "custom").build();
+        .claim("scope", buildScope(user)).build();
 
     Payload payload = new Payload(claimsSet.toJSONObject());
 
@@ -96,5 +97,11 @@ public class AuthenticationServiceImpl implements AuthenticationService {
       log.error(e.getMessage());
       throw new RuntimeException(e);
     }
+  }
+
+  private String buildScope(User user) {
+    StringJoiner stringJoiner = new StringJoiner(" ");
+    user.getRoles().forEach(stringJoiner::add);
+    return stringJoiner.toString();
   }
 }
