@@ -10,80 +10,91 @@ import com.nghiant.identityservice.exception.ErrorCode;
 import com.nghiant.identityservice.mapper.UserMapper;
 import com.nghiant.identityservice.repository.UserRepository;
 import com.nghiant.identityservice.service.UserService;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.prepost.PostAuthorize;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 @RequiredArgsConstructor
 @Service
+@Slf4j
 public class UserServiceImpl implements UserService {
 
-  private final UserRepository userRepository;
-  private final UserMapper userMapper;
-  private final PasswordEncoder passwordEncoder;
+    private final UserRepository userRepository;
+    private final UserMapper userMapper;
+    private final PasswordEncoder passwordEncoder;
 
-  @Override
-  public UserResponse createUser(UserCreationRequest request) {
-    if (userRepository.existsByUsername(request.getUsername())) {
-      throw new AppException(ErrorCode.USER_EXISTED);
+    @Override
+    public UserResponse createUser(UserCreationRequest request) {
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new AppException(ErrorCode.USER_EXISTED);
+        }
+
+        User user = userMapper.toUser(request);
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+
+        Set<String> role = new HashSet<>();
+        role.add(Role.USER.name());
+        user.setRoles(role);
+
+        userRepository.save(user);
+
+        return userMapper.toUserResponse(user);
     }
 
-    User user = userMapper.toUser(request);
-    user.setPassword(passwordEncoder.encode(request.getPassword()));
+    @Override
+    @PostAuthorize("returnObject.username == authentication.name")
+    public UserResponse getUser(String userId) {
 
-    Set<String> role = new HashSet<>();
-    role.add(Role.USER.name());
-    user.setRoles(role);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-    userRepository.save(user);
-
-    return userMapper.toUserResponse(user);
-  }
-
-  @Override
-  public UserResponse getUser(String userId) {
-
-    User user = userRepository.findById(userId)
-        .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
-
-    return userMapper.toUserResponse(user);
-  }
-
-  @Override
-  public List<UserResponse> getUsers() {
-    List<User> userList = userRepository.findAll();
-    List<UserResponse> responseList = new ArrayList<>();
-
-    for (User user : userList) {
-      responseList.add(userMapper.toUserResponse(user));
+        return userMapper.toUserResponse(user);
     }
 
-    return responseList;
-  }
+    public UserResponse getMyInfo() {
 
-  @Override
-  public UserResponse updateUser(String userId, UserUpdateRequest request) {
-    User existedUser = userRepository.findById(userId)
-        .orElseThrow(() -> new RuntimeException("User not found"));
+        // Get current user by token
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
-    userMapper.updateUser(existedUser, request);
+        User user = userRepository.findUserByUsername(authentication.getName())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-    userRepository.save(existedUser);
+        return userMapper.toUserResponse(user);
+    }
 
-    return userMapper.toUserResponse(existedUser);
-  }
+    @PreAuthorize("hasRole('ADMIN')")
+    @Override
+    public List<UserResponse> getUsers() {
+        return userRepository.findAll().stream().map(userMapper::toUserResponse).toList();
+    }
 
-  @Override
-  public String deleteUser(String userId) {
-    User existedUser = userRepository.findById(userId)
-        .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+    @Override
+    public UserResponse updateUser(String userId, UserUpdateRequest request) {
+        User existedUser = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-    userRepository.delete(existedUser);
-    return "User deleted successfully";
-  }
+        userMapper.updateUser(existedUser, request);
+
+        userRepository.save(existedUser);
+
+        return userMapper.toUserResponse(existedUser);
+    }
+
+    @Override
+    public String deleteUser(String userId) {
+        User existedUser = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+        userRepository.delete(existedUser);
+        return "User deleted successfully";
+    }
 }
