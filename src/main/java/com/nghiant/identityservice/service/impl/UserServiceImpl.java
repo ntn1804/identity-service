@@ -3,13 +3,17 @@ package com.nghiant.identityservice.service.impl;
 import com.nghiant.identityservice.dto.request.UserCreationRequest;
 import com.nghiant.identityservice.dto.request.UserUpdateRequest;
 import com.nghiant.identityservice.dto.response.UserResponse;
+import com.nghiant.identityservice.entity.Role;
 import com.nghiant.identityservice.entity.User;
-import com.nghiant.identityservice.enums.Role;
 import com.nghiant.identityservice.exception.AppException;
 import com.nghiant.identityservice.exception.ErrorCode;
 import com.nghiant.identityservice.mapper.UserMapper;
+import com.nghiant.identityservice.repository.RoleRepository;
 import com.nghiant.identityservice.repository.UserRepository;
 import com.nghiant.identityservice.service.UserService;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PostAuthorize;
@@ -19,82 +23,88 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
 @RequiredArgsConstructor
 @Service
 @Slf4j
 public class UserServiceImpl implements UserService {
 
-    private final UserRepository userRepository;
-    private final UserMapper userMapper;
-    private final PasswordEncoder passwordEncoder;
+  private final RoleRepository roleRepository;
 
-    @Override
-    public UserResponse createUser(UserCreationRequest request) {
-        if (userRepository.existsByUsername(request.getUsername())) {
-            throw new AppException(ErrorCode.USER_EXISTED);
-        }
+  private final UserRepository userRepository;
+  private final UserMapper userMapper;
+  private final PasswordEncoder passwordEncoder;
 
-        User user = userMapper.toUser(request);
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
-
-        Set<String> role = new HashSet<>();
-        role.add(Role.USER.name());
-        user.setRoles(role);
-
-        userRepository.save(user);
-
-        return userMapper.toUserResponse(user);
+  @Override
+  public UserResponse createUser(UserCreationRequest request) {
+    if (userRepository.existsByUsername(request.getUsername())) {
+      throw new AppException(ErrorCode.USER_EXISTED);
     }
 
-    @Override
-    @PostAuthorize("returnObject.username == authentication.name")
-    public UserResponse getUser(String userId) {
+    User user = userMapper.toUser(request);
+    user.setPassword(passwordEncoder.encode(request.getPassword()));
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+    var role = roleRepository.findById("USER")
+        .orElseThrow(() -> new AppException(ErrorCode.UNCATEGORIZED_ERROR));
 
-        return userMapper.toUserResponse(user);
-    }
+    Set<Role> roles = new HashSet<>();
+    roles.add(role);
 
-    public UserResponse getMyInfo() {
+    user.setRoles(roles);
 
-        // Get current user by token
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    userRepository.save(user);
 
-        User user = userRepository.findUserByUsername(authentication.getName())
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+    return userMapper.toUserResponse(user);
+  }
 
-        return userMapper.toUserResponse(user);
-    }
+  @Override
+  @PostAuthorize("returnObject.username == authentication.name")
+  public UserResponse getUser(String userId) {
 
-    @PreAuthorize("hasRole('ADMIN')")
-    @Override
-    public List<UserResponse> getUsers() {
-        return userRepository.findAll().stream().map(userMapper::toUserResponse).toList();
-    }
+    User user = userRepository.findById(userId)
+        .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-    @Override
-    public UserResponse updateUser(String userId, UserUpdateRequest request) {
-        User existedUser = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+    return userMapper.toUserResponse(user);
+  }
 
-        userMapper.updateUser(existedUser, request);
+  public UserResponse getMyInfo() {
 
-        userRepository.save(existedUser);
+    // Get current user by token
+    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
-        return userMapper.toUserResponse(existedUser);
-    }
+    User user = userRepository.findUserByUsername(authentication.getName())
+        .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-    @Override
-    public String deleteUser(String userId) {
-        User existedUser = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+    return userMapper.toUserResponse(user);
+  }
 
-        userRepository.delete(existedUser);
-        return "User deleted successfully";
-    }
+  @PreAuthorize("hasRole('ADMIN')")
+  @Override
+  public List<UserResponse> getUsers() {
+    return userRepository.findAll().stream().map(userMapper::toUserResponse).toList();
+  }
+
+  @Override
+  public UserResponse updateUser(String userId, UserUpdateRequest request) {
+    User existedUser = userRepository.findById(userId)
+        .orElseThrow(() -> new RuntimeException("User not found"));
+
+    userMapper.updateUser(existedUser, request);
+    existedUser.setPassword(passwordEncoder.encode(request.getPassword()));
+
+    var roles = roleRepository.findAllById(request.getRoles());
+    existedUser.setRoles(new HashSet<>(roles));
+
+    userRepository.save(existedUser);
+
+    return userMapper.toUserResponse(existedUser);
+  }
+
+  @Override
+  public String deleteUser(String userId) {
+    User existedUser = userRepository.findById(userId)
+        .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+    userRepository.delete(existedUser);
+    return "User deleted successfully";
+  }
 }

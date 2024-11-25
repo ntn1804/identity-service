@@ -101,7 +101,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
   private String buildScope(User user) {
     StringJoiner stringJoiner = new StringJoiner(" ");
-    user.getRoles().forEach(stringJoiner::add);
+//    user.getRoles().forEach(stringJoiner::add);
     return stringJoiner.toString();
   }
 }

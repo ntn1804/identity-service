@@ -1,5 +1,6 @@
 package com.nghiant.identityservice.dto.response;
 
+import com.nghiant.identityservice.entity.Role;
 import java.time.LocalDate;
 import java.util.Set;
 import lombok.Getter;
@@ -14,6 +15,6 @@ public class UserResponse {
   private String firstName;
   private String lastName;
   private LocalDate dob;
-  private Set<String> roles;
+  private Set<Role> roles;
 
 }
