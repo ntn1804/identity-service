@@ -2,6 +2,7 @@ package com.nghiant.identityservice.controller;
 
 import com.nghiant.identityservice.dto.request.AuthenticationRequest;
 import com.nghiant.identityservice.dto.request.IntrospectRequest;
+import com.nghiant.identityservice.dto.request.LogoutRequest;
 import com.nghiant.identityservice.dto.response.ApiResponse;
 import com.nghiant.identityservice.dto.response.AuthenticationResponse;
 import com.nghiant.identityservice.dto.response.IntrospectResponse;
@@ -29,10 +30,17 @@ public class AuthenticationController {
   }
 
   @PostMapping("/verify-token")
-  ApiResponse<IntrospectResponse> verifyToken(@RequestBody IntrospectRequest request)
+  ApiResponse<IntrospectResponse> introspectToken(@RequestBody IntrospectRequest request)
       throws ParseException, JOSEException {
     ApiResponse<IntrospectResponse> apiResponse = new ApiResponse<>();
-    apiResponse.setResult(authenticationService.verifyToken(request));
+    apiResponse.setResult(authenticationService.introspectToken(request));
+    return apiResponse;
+  }
+
+  @PostMapping("/logout")
+  ApiResponse<Void> logout(@RequestBody LogoutRequest request) throws ParseException, JOSEException {
+    ApiResponse<Void> apiResponse = new ApiResponse<>();
+    authenticationService.logout(request);
     return apiResponse;
   }
 }

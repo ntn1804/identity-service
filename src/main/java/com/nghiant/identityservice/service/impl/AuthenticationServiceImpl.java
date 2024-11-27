@@ -2,18 +2,32 @@ package com.nghiant.identityservice.service.impl;
 
 import com.nghiant.identityservice.dto.request.AuthenticationRequest;
 import com.nghiant.identityservice.dto.request.IntrospectRequest;
+import com.nghiant.identityservice.dto.request.LogoutRequest;
 import com.nghiant.identityservice.dto.response.AuthenticationResponse;
 import com.nghiant.identityservice.dto.response.IntrospectResponse;
+import com.nghiant.identityservice.entity.InvalidatedToken;
 import com.nghiant.identityservice.entity.User;
 import com.nghiant.identityservice.exception.AppException;
 import com.nghiant.identityservice.exception.ErrorCode;
+import com.nghiant.identityservice.repository.InvalidatedTokenRepository;
 import com.nghiant.identityservice.repository.UserRepository;
 import com.nghiant.identityservice.service.AuthenticationService;
-import com.nimbusds.jose.*;
+import com.nimbusds.jose.JOSEException;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.JWSObject;
+import com.nimbusds.jose.JWSVerifier;
+import com.nimbusds.jose.Payload;
 import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import java.text.ParseException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Date;
+import java.util.StringJoiner;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,92 +35,115 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
-import java.text.ParseException;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.Date;
-import java.util.StringJoiner;
-
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class AuthenticationServiceImpl implements AuthenticationService {
 
-    private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
+  private final InvalidatedTokenRepository invalidatedTokenRepository;
 
-    @Value("${jwt.signerKey}")
-    protected String signerKey;
+  private final UserRepository userRepository;
+  private final PasswordEncoder passwordEncoder;
 
-    @Override
-    public AuthenticationResponse authenticate(AuthenticationRequest request) {
-        User user = userRepository.findUserByUsername(request.getUsername())
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+  @Value("${jwt.signerKey}")
+  protected String signerKey;
 
-        AuthenticationResponse authenticationResponse = new AuthenticationResponse();
-        authenticationResponse.setAuthenticated(
-                passwordEncoder.matches(request.getPassword(), user.getPassword()));
+  @Override
+  public AuthenticationResponse authenticate(AuthenticationRequest request) {
+    User user = userRepository.findUserByUsername(request.getUsername())
+        .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-        String token = generateToken(user);
-        authenticationResponse.setToken(token);
+    AuthenticationResponse authenticationResponse = new AuthenticationResponse();
+    authenticationResponse.setAuthenticated(
+        passwordEncoder.matches(request.getPassword(), user.getPassword()));
 
-        return authenticationResponse;
+    String token = generateToken(user);
+    authenticationResponse.setToken(token);
+
+    return authenticationResponse;
+  }
+
+  @Override
+  public IntrospectResponse introspectToken(IntrospectRequest request)
+      throws JOSEException, ParseException {
+    String token = request.getToken();
+
+    verifyToken(token);
+
+    return IntrospectResponse.builder()
+        .valid(true)
+        .build();
+  }
+
+  @Override
+  public void logout(LogoutRequest request) throws ParseException, JOSEException {
+    SignedJWT signedJWT = verifyToken(request.getToken());
+
+    Date expiredTime = signedJWT.getJWTClaimsSet().getExpirationTime();
+    String jwtId = signedJWT.getJWTClaimsSet().getJWTID();
+
+    InvalidatedToken invalidatedToken = InvalidatedToken.builder()
+        .jwtId(jwtId)
+        .expiredTime(expiredTime)
+        .build();
+
+    invalidatedTokenRepository.save(invalidatedToken);
+  }
+
+  private SignedJWT verifyToken(String token) throws JOSEException, ParseException {
+    // Create jwsVerifier instance based on signerKey byte[]
+    JWSVerifier jwsVerifier = new MACVerifier(signerKey.getBytes());
+
+    // Parse data from token
+    SignedJWT signedJWT = SignedJWT.parse(token);
+
+    Date expiredTime = signedJWT.getJWTClaimsSet().getExpirationTime();
+
+    boolean verified = signedJWT.verify(jwsVerifier);
+
+    if (!(expiredTime.after(new Date()) || verified)) {
+      throw new AppException(ErrorCode.UNAUTHENTICATED);
     }
 
-    @Override
-    public IntrospectResponse verifyToken(IntrospectRequest request) throws JOSEException, ParseException {
-        String token = request.getToken();
+    return signedJWT;
+  }
 
-        // Create jwsVerifier instance based on signerKey byte[]
-        JWSVerifier jwsVerifier = new MACVerifier(signerKey.getBytes());
+  private String generateToken(User user) {
+    JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
 
-        // Parse data from token
-        SignedJWT signedJWT = SignedJWT.parse(token);
+    JWTClaimsSet claimsSet = new JWTClaimsSet.Builder().subject(user.getUsername())
+        .issuer("nghiant.com").issueTime(new Date())
+        .expirationTime(new Date(Instant.now().plus(1, ChronoUnit.HOURS).toEpochMilli()))
+        .claim("scope", buildScope(user))
+        .jwtID(UUID.randomUUID().toString()).build();
 
-        Date expiredTime = signedJWT.getJWTClaimsSet().getExpirationTime();
+    Payload payload = new Payload(claimsSet.toJSONObject());
 
-        boolean verified = signedJWT.verify(jwsVerifier);
+    JWSObject jwsObject = new JWSObject(header, payload);
 
-        return IntrospectResponse.builder()
-                .valid(verified && expiredTime.after(new Date()))
-                .build();
+    try {
+      MACSigner macSigner = new MACSigner(signerKey.getBytes());
+      jwsObject.sign(macSigner);
+      return jwsObject.serialize();
+    } catch (JOSEException e) {
+      log.error(e.getMessage());
+      throw new RuntimeException(e);
     }
+  }
 
-    private String generateToken(User user) {
-        JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
+  private String buildScope(User user) {
+    StringJoiner stringJoiner = new StringJoiner(" ");
 
-        JWTClaimsSet claimsSet = new JWTClaimsSet.Builder().subject(user.getUsername())
-                .issuer("nghiant.com").issueTime(new Date())
-                .expirationTime(new Date(Instant.now().plus(1, ChronoUnit.HOURS).toEpochMilli()))
-                .claim("scope", buildScope(user)).build();
-
-        Payload payload = new Payload(claimsSet.toJSONObject());
-
-        JWSObject jwsObject = new JWSObject(header, payload);
-
-        try {
-            MACSigner macSigner = new MACSigner(signerKey.getBytes());
-            jwsObject.sign(macSigner);
-            return jwsObject.serialize();
-        } catch (JOSEException e) {
-            log.error(e.getMessage());
-            throw new RuntimeException(e);
+    if (!CollectionUtils.isEmpty(user.getRoles())) {
+      user.getRoles().forEach(role -> {
+        stringJoiner.add("ROLE_" + role.getName());
+        if (!CollectionUtils.isEmpty(role.getPermissions())) {
+          role.getPermissions().forEach(permission -> {
+            stringJoiner.add(permission.getName());
+          });
         }
+      });
     }
-
-    private String buildScope(User user) {
-        StringJoiner stringJoiner = new StringJoiner(" ");
-
-        if (!CollectionUtils.isEmpty(user.getRoles())) {
-            user.getRoles().forEach(role -> {
-                stringJoiner.add("ROLE_" + role.getName());
-                if (!CollectionUtils.isEmpty(role.getPermissions())) {
-                    role.getPermissions().forEach(permission -> {
-                        stringJoiner.add(permission.getName());
-                    });
-                }
-            });
-        }
-        return stringJoiner.toString();
-    }
+    return stringJoiner.toString();
+  }
 }
