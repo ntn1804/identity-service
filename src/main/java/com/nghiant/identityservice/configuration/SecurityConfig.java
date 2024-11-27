@@ -23,7 +23,7 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-  private final String[] PUBLIC_ENDPOINTS = {"/users", "/auth/login", "/auth/verify-token"};
+  private final String[] PUBLIC_ENDPOINTS = {"/users", "/auth/login", "/auth/verify-token", "/roles", "/permissions"};
   @Value("${jwt.signerKey}")
   private String signerKey;
 
@@ -62,7 +62,7 @@ public class SecurityConfig {
   @Bean
   JwtAuthenticationConverter jwtAuthenticationConverter() {
     JwtGrantedAuthoritiesConverter jwtGrantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
-    jwtGrantedAuthoritiesConverter.setAuthorityPrefix("ROLE_");
+    jwtGrantedAuthoritiesConverter.setAuthorityPrefix("");
 
     JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
     jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(jwtGrantedAuthoritiesConverter);
