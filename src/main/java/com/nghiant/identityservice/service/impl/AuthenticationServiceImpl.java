@@ -31,6 +31,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
@@ -43,13 +44,15 @@ public class AuthenticationServiceImpl implements AuthenticationService {
   private final InvalidatedTokenRepository invalidatedTokenRepository;
 
   private final UserRepository userRepository;
-  private final PasswordEncoder passwordEncoder;
 
   @Value("${jwt.signerKey}")
   protected String signerKey;
 
   @Override
   public AuthenticationResponse authenticate(AuthenticationRequest request) {
+
+    PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
+
     User user = userRepository.findUserByUsername(request.getUsername())
         .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
@@ -66,12 +69,18 @@ public class AuthenticationServiceImpl implements AuthenticationService {
   @Override
   public IntrospectResponse introspectToken(IntrospectRequest request)
       throws JOSEException, ParseException {
-    String token = request.getToken();
 
-    verifyToken(token);
+    String token = request.getToken();
+    boolean isValid = true;
+
+    try {
+      verifyToken(token);
+    } catch (AppException exception) {
+      isValid = false;
+    }
 
     return IntrospectResponse.builder()
-        .valid(true)
+        .valid(isValid)
         .build();
   }
 
@@ -102,6 +111,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     boolean verified = signedJWT.verify(jwsVerifier);
 
     if (!(expiredTime.after(new Date()) || verified)) {
+      throw new AppException(ErrorCode.UNAUTHENTICATED);
+    }
+
+    if (invalidatedTokenRepository.existsById(signedJWT.getJWTClaimsSet().getJWTID())) {
       throw new AppException(ErrorCode.UNAUTHENTICATED);
     }
 
@@ -138,9 +151,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
       user.getRoles().forEach(role -> {
         stringJoiner.add("ROLE_" + role.getName());
         if (!CollectionUtils.isEmpty(role.getPermissions())) {
-          role.getPermissions().forEach(permission -> {
-            stringJoiner.add(permission.getName());
-          });
+          role.getPermissions().forEach(permission -> stringJoiner.add(permission.getName()));
         }
       });
     }
