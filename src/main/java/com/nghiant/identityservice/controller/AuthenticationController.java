@@ -3,6 +3,7 @@ package com.nghiant.identityservice.controller;
 import com.nghiant.identityservice.dto.request.AuthenticationRequest;
 import com.nghiant.identityservice.dto.request.IntrospectRequest;
 import com.nghiant.identityservice.dto.request.LogoutRequest;
+import com.nghiant.identityservice.dto.request.RefreshRequest;
 import com.nghiant.identityservice.dto.response.ApiResponse;
 import com.nghiant.identityservice.dto.response.AuthenticationResponse;
 import com.nghiant.identityservice.dto.response.IntrospectResponse;
@@ -41,6 +42,14 @@ public class AuthenticationController {
   ApiResponse<Void> logout(@RequestBody LogoutRequest request) throws ParseException, JOSEException {
     ApiResponse<Void> apiResponse = new ApiResponse<>();
     authenticationService.logout(request);
+    return apiResponse;
+  }
+
+  @PostMapping("/refresh")
+  ApiResponse<AuthenticationResponse> login(@RequestBody RefreshRequest request)
+      throws ParseException, JOSEException {
+    ApiResponse<AuthenticationResponse> apiResponse = new ApiResponse<>();
+    apiResponse.setResult(authenticationService.refreshToken(request));
     return apiResponse;
   }
 }

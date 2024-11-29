@@ -22,7 +22,7 @@ public class SecurityConfig {
 
   private final CustomJwtDecoder customJwtDecoder;
   private final String[] PUBLIC_ENDPOINTS = {"/users", "/auth/login", "/auth/verify-token",
-      "/roles", "/permissions", "/auth/logout"};
+      "/roles", "/permissions", "/auth/logout", "/auth/refresh"};
 
   @Bean
   public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {

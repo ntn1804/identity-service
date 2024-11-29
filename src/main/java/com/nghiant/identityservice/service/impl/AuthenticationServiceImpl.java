@@ -3,6 +3,7 @@ package com.nghiant.identityservice.service.impl;
 import com.nghiant.identityservice.dto.request.AuthenticationRequest;
 import com.nghiant.identityservice.dto.request.IntrospectRequest;
 import com.nghiant.identityservice.dto.request.LogoutRequest;
+import com.nghiant.identityservice.dto.request.RefreshRequest;
 import com.nghiant.identityservice.dto.response.AuthenticationResponse;
 import com.nghiant.identityservice.dto.response.IntrospectResponse;
 import com.nghiant.identityservice.entity.InvalidatedToken;
@@ -42,11 +43,17 @@ import org.springframework.util.CollectionUtils;
 public class AuthenticationServiceImpl implements AuthenticationService {
 
   private final InvalidatedTokenRepository invalidatedTokenRepository;
-
   private final UserRepository userRepository;
 
   @Value("${jwt.signerKey}")
   protected String signerKey;
+
+  @Value("${jwt.valid-duration}")
+  protected long VALID_DURATION;
+
+  @Value("${jwt.refreshable-duration}")
+  protected long REFRESHABLE_DURATION;
+
 
   @Override
   public AuthenticationResponse authenticate(AuthenticationRequest request) {
@@ -74,7 +81,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     boolean isValid = true;
 
     try {
-      verifyToken(token);
+      verifyToken(token, false);
     } catch (AppException exception) {
       isValid = false;
     }
@@ -86,9 +93,40 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
   @Override
   public void logout(LogoutRequest request) throws ParseException, JOSEException {
-    SignedJWT signedJWT = verifyToken(request.getToken());
+    try {
+      SignedJWT signedJWT = verifyToken(request.getToken(), true);
 
+      Date expiredTime = signedJWT.getJWTClaimsSet().getExpirationTime();
+      String jwtId = signedJWT.getJWTClaimsSet().getJWTID();
+
+      InvalidatedToken invalidatedToken = InvalidatedToken.builder()
+          .jwtId(jwtId)
+          .expiredTime(expiredTime)
+          .build();
+
+      invalidatedTokenRepository.save(invalidatedToken);
+    } catch (AppException exception) {
+      log.warn("Token already expired");
+    }
+  }
+
+  @Override
+  public AuthenticationResponse refreshToken(RefreshRequest request)
+      throws ParseException, JOSEException {
+
+    // Parse information from old token
+    SignedJWT signedJWT = verifyToken(request.getToken(), true);
+
+    String username = signedJWT.getJWTClaimsSet().getSubject();
     Date expiredTime = signedJWT.getJWTClaimsSet().getExpirationTime();
+
+    User user = userRepository.findUserByUsername(username)
+        .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+    // Create new token
+    String token = generateToken(user);
+
+    // Delete old token
     String jwtId = signedJWT.getJWTClaimsSet().getJWTID();
 
     InvalidatedToken invalidatedToken = InvalidatedToken.builder()
@@ -97,20 +135,30 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         .build();
 
     invalidatedTokenRepository.save(invalidatedToken);
+
+    return AuthenticationResponse.builder()
+        .token(token)
+        .authenticated(true)
+        .build();
   }
 
-  private SignedJWT verifyToken(String token) throws JOSEException, ParseException {
+  private SignedJWT verifyToken(String token, boolean isRefresh)
+      throws JOSEException, ParseException {
     // Create jwsVerifier instance based on signerKey byte[]
     JWSVerifier jwsVerifier = new MACVerifier(signerKey.getBytes());
 
     // Parse data from token
     SignedJWT signedJWT = SignedJWT.parse(token);
 
-    Date expiredTime = signedJWT.getJWTClaimsSet().getExpirationTime();
+    Date expiredTime = (isRefresh)
+        ? new Date(
+        signedJWT.getJWTClaimsSet().getIssueTime().toInstant().plusSeconds(REFRESHABLE_DURATION)
+            .toEpochMilli())
+        : signedJWT.getJWTClaimsSet().getExpirationTime();
 
     boolean verified = signedJWT.verify(jwsVerifier);
 
-    if (!(expiredTime.after(new Date()) || verified)) {
+    if (!(expiredTime.after(new Date()) && verified)) {
       throw new AppException(ErrorCode.UNAUTHENTICATED);
     }
 
@@ -126,7 +174,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     JWTClaimsSet claimsSet = new JWTClaimsSet.Builder().subject(user.getUsername())
         .issuer("nghiant.com").issueTime(new Date())
-        .expirationTime(new Date(Instant.now().plus(1, ChronoUnit.HOURS).toEpochMilli()))
+        .expirationTime(
+            new Date(Instant.now().plus(VALID_DURATION, ChronoUnit.SECONDS).toEpochMilli()))
         .claim("scope", buildScope(user))
         .jwtID(UUID.randomUUID().toString()).build();
 
