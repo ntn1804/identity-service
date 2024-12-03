@@ -4,6 +4,7 @@ import com.nghiant.identityservice.dto.response.ApiResponse;
 import jakarta.validation.ConstraintViolation;
 import java.util.Map;
 import java.util.Objects;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
 @ControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
   private static final String MIN_ATTRIBUTE = "min";
@@ -67,6 +69,7 @@ public class GlobalExceptionHandler {
 
   private String mapAttribute(String message, Map<String, Object> attributes) {
     String minValue = String.valueOf(attributes.get(MIN_ATTRIBUTE));
+    log.info(attributes.toString());
 
     return message.replace("{" + MIN_ATTRIBUTE + "}", minValue);
   }
