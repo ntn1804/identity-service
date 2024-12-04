@@ -1,5 +1,6 @@
 package com.nghiant.identityservice.entity;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -24,6 +25,8 @@ public class User {
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
   private String userId;
+
+  @Column(name = "username", unique = true, columnDefinition = "VARCHAR(255) COLLATE utf8mb4_unicode_ci")
   private String username;
   private String password;
   private String firstName;
