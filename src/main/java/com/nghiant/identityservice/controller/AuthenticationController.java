@@ -11,6 +11,7 @@ import com.nghiant.identityservice.service.AuthenticationService;
 import com.nimbusds.jose.JOSEException;
 import java.text.ParseException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -39,14 +40,15 @@ public class AuthenticationController {
   }
 
   @PostMapping("/logout")
-  ApiResponse<Void> logout(@RequestBody LogoutRequest request) throws ParseException, JOSEException {
+  ApiResponse<Void> logout(@RequestBody LogoutRequest request)
+      throws ParseException, JOSEException {
     ApiResponse<Void> apiResponse = new ApiResponse<>();
     authenticationService.logout(request);
     return apiResponse;
   }
 
   @PostMapping("/refresh")
-  ApiResponse<AuthenticationResponse> login(@RequestBody RefreshRequest request)
+  ApiResponse<AuthenticationResponse> refreshToken(@RequestBody RefreshRequest request)
       throws ParseException, JOSEException {
     ApiResponse<AuthenticationResponse> apiResponse = new ApiResponse<>();
     apiResponse.setResult(authenticationService.refreshToken(request));

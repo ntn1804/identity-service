@@ -32,7 +32,7 @@ public class UserController {
         return apiResponse;
     }
 
-    @GetMapping("/myInfo")
+    @GetMapping("/my-info")
     ApiResponse<UserResponse> getMyInfo() {
         ApiResponse<UserResponse> apiResponse = new ApiResponse<>();
         apiResponse.setResult(userService.getMyInfo());

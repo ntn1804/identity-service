@@ -175,7 +175,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     JWTClaimsSet claimsSet = new JWTClaimsSet.Builder().subject(user.getUsername())
         .issuer("nghiant.com").issueTime(new Date())
         .expirationTime(
-            new Date(Instant.now().plus(VALID_DURATION, ChronoUnit.SECONDS).toEpochMilli()))
+            new Date(Instant.now().plus(VALID_DURATION, ChronoUnit.DAYS).toEpochMilli()))
         .claim("scope", buildScope(user))
         .jwtID(UUID.randomUUID().toString()).build();
 
